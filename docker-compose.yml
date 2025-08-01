@@ -1,0 +1,61 @@
+
+version: '3.8'
+
+services:
+  mediaguard-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mediaguard-api
+    ports:
+      - "8080:8080"
+    depends_on:
+      mediaguard-db:
+        condition: service_healthy
+    environment:
+      - APP_PORT=8080
+      - DATABASE_URL=postgres://user:password@mediaguard-db:5432/mediaguard?sslmode=disable
+    networks:
+      - mediaguard-net
+
+  mediaguard-db:
+    image: postgres:17-alpine
+    container_name: mediaguard-db
+    ports:
+      - "5432:5432"
+    volumes:
+      - mediaguard-data:/var/lib/postgresql/data
+      # This script runs automatically on the first start of the container
+      - ./migrations/001_initial_schema.up.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=mediaguard
+    networks:
+      - mediaguard-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d mediaguard"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  vse:
+    image: videntifier/vse-stack:6.5.1
+    ports:
+      - "5555:9001"
+      - "7771:7771"
+    container_name: vse
+    volumes:
+      - ./db/database:/mnt/database
+      - ./db/config/vse-config.yaml:/app/VSE/vse-config.yaml
+      - ./db/config/supervisord.conf:/app/supervisord.conf
+    restart: always
+    networks:
+      - mediaguard-net
+
+volumes:
+  mediaguard-data:
+
+networks:
+  mediaguard-net:
+    driver: bridge
