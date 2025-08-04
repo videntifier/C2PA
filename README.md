@@ -11,12 +11,15 @@ MediaGuard is an extendable standalone API service in Go for media hashing and w
 - [Getting Started](#getting-started)
 - [Configuration](#configuration)
 - [API Documentation](#api-documentation)
-- [Running the Project](#running-the-project)
+- [Extending the API](#extending-the-api)
 
 ## Features
 
--   **Perceptual Hashing**: Generate hashes for images and videos. Currently implements Videntifier Visual Fingerprints and SHA256 Cryptographic hash.
--   **Digital Watermarking**: Embed and extract watermarks. Currently implements metadata embedding via FFMPEG.
+-   **Perceptual Hashing**: Generate hashes for images and videos. Currently implements:
+      - Videntifier Visual Fingerprints (VT Hashes).
+      - SHA256 Cryptographic hash.
+-   **Digital Watermarking**: Embed and extract watermarks. Currently implements:
+      - Metadata embedding via FFMPEG.
 -   **Extensible**: Easily add new hashing and watermarking algorithms.
 -   **Persistent Storage**: Uses PostgreSQL to store hash and watermarking metadata.
 -   **Containerized**: Fully containerized with Docker and orchestrated with Docker Compose.
@@ -34,7 +37,6 @@ MediaGuard is an extendable standalone API service in Go for media hashing and w
 ### Challenges to address 
 1. **File has been modified.**
 2. **File metadata has been stripped.**
-
 
 ## Prerequisites
 
@@ -155,7 +157,7 @@ Health check endpoint.
 - **Response:** `200 OK` with body `OK`.
 
 
-## Extending the API: Adding New Hashing or Watermarking Algorithms
+## Extending the API
 
 ### Adding a New Hashing Algorithm
 
