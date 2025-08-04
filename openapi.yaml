@@ -1,3 +1,4 @@
+
 openapi: 3.0.3
 info:
   title: MediaGuard API
@@ -5,6 +6,76 @@ info:
   description: Extendable API for media hashing and watermarking.
 servers:
   - url: http://localhost:8080
+components:
+  schemas:
+    APIEnvelope:
+      type: object
+      properties:
+        version:
+          type: string
+          example: v1
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+        data:
+          type: object
+    HashResponse:
+      type: object
+      properties:
+        file_uuid:
+          type: string
+        filename:
+          type: string
+        hashes:
+          type: object
+          additionalProperties:
+            type: string
+    FileResponse:
+      type: object
+      properties:
+        file_uuid:
+          type: string
+        filename:
+          type: string
+        hashes:
+          type: object
+          additionalProperties:
+            type: string
+        watermarks:
+          type: array
+          items:
+            $ref: '#/components/schemas/WaterMarkHistory'
+    WaterMarkHistory:
+      type: object
+      properties:
+        algorithm:
+          type: string
+        md5:
+          type: string
+    WaterMarkRespone:
+      type: object
+      properties:
+        algorithm:
+          type: string
+        watermark:
+          type: object
+          additionalProperties:
+            type: string
+    EntrySimilarity:
+      type: object
+      properties:
+        algorithm:
+          type: string
+        uuid:
+          type: string
+        similarity:
+          type: integer
+        hashId:
+          type: string
+  
+
 paths:
   /api/v1/hashes:
     post:
@@ -19,18 +90,68 @@ paths:
                 media:
                   type: string
                   format: binary
+                config:
+                  type: string
       responses:
         '200':
           description: Success
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  uuid:
+                $ref: '#/components/schemas/APIEnvelope'
+  /api/v1/hashes/algorithms:
+    get:
+      summary: Returns a list of supported hash algorithms.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIEnvelope'
+  /api/v1/query/hashes/by-media:
+    post:
+      summary: Queries the database to find media with similar perceptual hashes.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                media:
+                  type: string
+                  format: binary
+                config:
+                  type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIEnvelope'
+  /api/v1/query/hashes/by-hash:
+    post:
+      summary: Queries the database for entries matching specific hash values.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                hashes:
+                  type: object
+                  additionalProperties:
                     type: string
-                  hashes:
-                    type: object
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIEnvelope'
   /api/v1/files/{uuid}:
     get:
       summary: Retrieves all stored information for a file.
@@ -46,10 +167,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  metadata:
-                    type: object
+                $ref: '#/components/schemas/APIEnvelope'
   /api/v1/watermarks:
     post:
       summary: Embeds a watermark into a media file.
@@ -63,27 +181,9 @@ paths:
                 media:
                   type: string
                   format: binary
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  result:
-                    type: string
-  /api/v1/query/hashes:
-    post:
-      summary: Queries the database to find media with similar perceptual hashes.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                hash:
+                config:
+                  type: string
+                data:
                   type: string
       responses:
         '200':
@@ -91,12 +191,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  matches:
-                    type: array
-                    items:
-                      type: object
+                $ref: '#/components/schemas/APIEnvelope'
   /api/v1/query/watermarks:
     post:
       summary: Extracts a watermark from a media file.
@@ -110,13 +205,22 @@ paths:
                 media:
                   type: string
                   format: binary
+                config:
+                  type: string
       responses:
         '200':
           description: Success
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  watermark:
-                    type: string
+                $ref: '#/components/schemas/APIEnvelope'
+  /api/v1/watermarks/algorithms:
+    get:
+      summary: Returns a list of supported watermarking algorithms.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIEnvelope'

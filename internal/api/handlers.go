@@ -23,6 +23,16 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
+const apiVersion = "v1"
+
+// APIEnvelope is the master structure for all API responses
+type APIEnvelope struct {
+	Version string      `json:"version"`
+	Status  string      `json:"status"`
+	Message string      `json:"message,omitempty"`
+	Data    interface{} `json:"data,omitempty"`
+}
+
 // Handlers holds dependencies for HTTP handlers.
 type Handlers struct {
 	DB *pgxpool.Pool
@@ -35,21 +45,30 @@ func NewHandlers(db *pgxpool.Pool) *Handlers {
 
 // --- Helper Functions ---
 
-// respondWithJSON is a helper to send a JSON response.
-func (h *Handlers) respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
+// respondWithEnvelope sends a response using the APIEnvelope structure
+func (h *Handlers) respondWithEnvelope(w http.ResponseWriter, code int, status, message string, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	if payload != nil {
-		if err := json.NewEncoder(w).Encode(payload); err != nil {
-			log.Printf("Failed to encode response: %v", err)
-		}
+	env := APIEnvelope{
+		Version: apiVersion,
+		Status:  status,
+		Message: message,
+		Data:    data,
+	}
+	if err := json.NewEncoder(w).Encode(env); err != nil {
+		log.Printf("Failed to encode response: %v", err)
 	}
 }
 
-// respondWithError is a helper to send a JSON error message.
+// respondWithJSON wraps payload in the envelope and sends a success response
+func (h *Handlers) respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
+	h.respondWithEnvelope(w, code, "success", "", payload)
+}
+
+// respondWithError wraps error message in the envelope and sends an error response
 func (h *Handlers) respondWithError(w http.ResponseWriter, code int, message string) {
 	log.Printf("Error: %s", message)
-	h.respondWithJSON(w, code, map[string]string{"error": message})
+	h.respondWithEnvelope(w, code, "error", message, nil)
 }
 
 // parseCreateHashesRequest parses the multipart form data to extract the file,
