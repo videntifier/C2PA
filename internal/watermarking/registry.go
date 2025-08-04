@@ -11,15 +11,6 @@ func Register(name string, w Watermarker) {
 	registry[name] = w
 }
 
-// RegisterWatermarker adds a new watermarker to the registry.
-func RegisterWatermarker(wm Watermarker) {
-	name := wm.Name()
-	if _, exists := registry[name]; exists {
-		panic(fmt.Sprintf("watermarker with name '%s' is already registered", name))
-	}
-	registry[name] = wm
-}
-
 // GetWatermarker retrieves a watermarker from the registry.
 func GetWatermarker(name string) (Watermarker, error) {
 	wm, exists := registry[name]

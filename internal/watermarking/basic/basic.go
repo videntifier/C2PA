@@ -10,18 +10,25 @@ import (
 	"os/exec"
 )
 
-const BasicAlgorithm = "basic"
-
 // LSB is a placeholder implementation of LSB watermarking.
-type Basic struct{}
+type Basic struct {
+	Algorithm string
+}
 
 func init() {
-	watermarking.Register(BasicAlgorithm, &Basic{})
+
+	basic := &Basic{
+		Algorithm: "basic",
+	}
+
+	//If needed read configuration values from environment
+
+	watermarking.Register(basic.Algorithm, basic)
 }
 
 // Name returns the algorithm's name.
 func (w *Basic) Name() string {
-	return BasicAlgorithm
+	return w.Algorithm
 }
 
 // Description returns the algorithm's description.
@@ -120,7 +127,7 @@ func (w *Basic) Extract(reader io.Reader) ([]byte, error) {
 
 	val, ok := result.Format.Tags["comment"]
 	if !ok {
-		return nil, fmt.Errorf("metadata %q not found", BasicAlgorithm)
+		return nil, fmt.Errorf("metadata %q not found", w.Algorithm)
 	}
 
 	return []byte(val), nil

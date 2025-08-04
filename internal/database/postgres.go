@@ -1,11 +1,11 @@
-
 package database
 
 import (
 	"context"
-	"github.com/jackc/pgx/v4/pgxpool"
 	"log"
 	"time"
+
+	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 // NewPostgresPool creates a new database connection pool.
@@ -31,7 +31,7 @@ func NewPostgresPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, er
 		pool.Close()
 		return nil, err
 	}
-	
+
 	log.Println("Database pool created successfully.")
 	return pool, nil
 }

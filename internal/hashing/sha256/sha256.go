@@ -9,8 +9,6 @@ import (
 )
 
 type SHA256Hash struct{}
-type SHA256Parser struct{}
-type SHA256Config struct{}
 
 const AlgorithmSHA256 = "sha256"
 

@@ -22,7 +22,8 @@ CREATE TABLE watermark_history (
     id BIGSERIAL PRIMARY KEY,
     file_uuid UUID NOT NULL REFERENCES files(uuid) ON DELETE CASCADE,
     algorithm VARCHAR(50) NOT NULL,
-    embedded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    embedded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    md5_after VARCHAR(32)
 );
 
 -- Indexes for performance

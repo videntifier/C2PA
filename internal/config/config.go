@@ -1,8 +1,8 @@
-
 package config
 
 import (
 	"os"
+
 	"github.com/joho/godotenv"
 )
 
@@ -17,7 +17,7 @@ func Load() (*Config, error) {
 	// Load .env file if it exists (useful for local development without Docker)
 	godotenv.Load()
 
-	port := os.Getenv("APP_PORT")
+	port := os.Getenv("API_PORT")
 	if port == "" {
 		port = "8080" // Default port
 	}
@@ -27,7 +27,7 @@ func Load() (*Config, error) {
 		// Provide a default for local dev if needed
 		dbURL = "postgres://user:password@localhost:5432/mediaguard?sslmode=disable"
 	}
-	
+
 	return &Config{
 		Port:        port,
 		DatabaseURL: dbURL,

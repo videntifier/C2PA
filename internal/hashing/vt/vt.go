@@ -18,15 +18,10 @@ import (
 	"time"
 )
 
-const VSEAddress = "http://vse:7771"
-const VSEToken = "VIDENTIFIER"
-const VTAlgorithm = "vt"
-
-type VTHash struct{}
-type VTConfig struct{}
-
-type VTParser struct {
-	FPS string `json:"fps"`
+type VTHash struct {
+	Address   string
+	Token     string
+	Algorithm string
 }
 
 // API Structs
@@ -111,11 +106,28 @@ type APIError struct {
 }
 
 func init() {
-	hashing.Register(VTAlgorithm, &VTHash{})
+
+	//Read configuration from environment variables
+	vtHash := &VTHash{}
+
+	// Read from environment variables, set defaults if not set
+	vtHash.Address = os.Getenv("VSE_ADDRESS")
+	if vtHash.Address == "" {
+		vtHash.Address = "http://vse:7771"
+		log.Printf("[INFO] VT-Hasher using default address %s", vtHash.Address)
+	}
+	vtHash.Token = os.Getenv("VSE_TOKEN")
+	if vtHash.Token == "" {
+		vtHash.Token = "VIDENTIFIER"
+		log.Println("[INFO] VT-Hasher using default token")
+	}
+	vtHash.Algorithm = "vt"
+
+	hashing.Register(vtHash.Algorithm, vtHash)
 }
 
 func (h *VTHash) Name() string {
-	return VTAlgorithm
+	return h.Algorithm
 }
 
 func (h *VTHash) Description() string {
@@ -132,7 +144,7 @@ func (h *VTHash) ExtractHash(reader io.Reader) (string, error) {
 	}
 
 	log.Printf("[INFO] Inserting VT Hash")
-	contentId, err := insertVTHashFile(descFile)
+	contentId, err := h.insertVTHashFile(descFile)
 
 	if err != nil {
 		return "", fmt.Errorf("failed to insert hash into db")
@@ -153,7 +165,7 @@ func (h *VTHash) CheckHash(reader io.Reader) ([]models.EntrySimilarity, error) {
 	}
 
 	//Extract the descriptor from the file
-	entries, err = queryVTHashFile(descFile)
+	entries, err = h.queryVTHashFile(descFile)
 
 	if err != nil {
 		return entries, fmt.Errorf("failed to query hash")
@@ -200,8 +212,8 @@ func extractDescriptorsIntoFile(reader io.Reader) (string, error) {
 }
 
 // Utility function to insert VT Fingerprints into a VT Database instance
-func insertVTHashFile(filePath string) (int, error) {
-	apiUrl := fmt.Sprintf("%s/api/v0/insert", VSEAddress)
+func (h *VTHash) insertVTHashFile(filePath string) (int, error) {
+	apiUrl := fmt.Sprintf("%s/api/v0/insert", h.Address)
 
 	fmt.Printf("[INFO] API URL: %s \n", apiUrl)
 
@@ -247,12 +259,9 @@ func insertVTHashFile(filePath string) (int, error) {
 	// Tell the server to close the connection after the request
 	request.Close = true
 
-	fmt.Printf("[INFO] Inserting %s \n", filePath)
-	fmt.Printf("[INFO] Using token %s \n", VSEToken)
-
 	// Set headers for POST request
 	request.Header.Set("Content-Type", writer.FormDataContentType())
-	request.Header.Set("Authorization", VSEToken)
+	request.Header.Set("Authorization", h.Token)
 
 	// Send the request and check the response status code
 	client := &http.Client{}
@@ -304,8 +313,8 @@ func insertVTHashFile(filePath string) (int, error) {
 	return nvtreeResponse.Data.ContentID, nil
 }
 
-func queryVTHashFile(filePath string) ([]models.EntrySimilarity, error) {
-	apiUrl := fmt.Sprintf("%s/api/v0/query", VSEAddress)
+func (h *VTHash) queryVTHashFile(filePath string) ([]models.EntrySimilarity, error) {
+	apiUrl := fmt.Sprintf("%s/api/v0/query", h.Address)
 
 	var result []models.EntrySimilarity
 
@@ -357,11 +366,9 @@ func queryVTHashFile(filePath string) ([]models.EntrySimilarity, error) {
 
 	// Set headers for POST request
 	request.Header.Set("Content-Type", writer.FormDataContentType())
-	request.Header.Set("Authorization", VSEToken)
+	request.Header.Set("Authorization", h.Token)
 
 	// Send the request and check the response status code
-
-	//start := time.Now() // Record the start time
 
 	client := &http.Client{}
 	response, err := client.Do(request)
@@ -371,9 +378,6 @@ func queryVTHashFile(filePath string) ([]models.EntrySimilarity, error) {
 	}
 
 	defer response.Body.Close()
-
-	//duration := time.Since(start) // Calculate the elapsed time
-	//fmt.Printf("[INFO] VSE Request time: %d : ms\n", duration.Milliseconds())
 
 	if response.StatusCode != http.StatusOK {
 
@@ -423,7 +427,7 @@ func queryVTHashFile(filePath string) ([]models.EntrySimilarity, error) {
 		}
 
 		var entry models.EntrySimilarity
-		entry.Algorithm = VTAlgorithm
+		entry.Algorithm = h.Algorithm
 		entry.Similarity = similarityScore
 		entry.HashId = fmt.Sprintf("%d", match.ContentID)
 

@@ -52,8 +52,6 @@ func (h *Handlers) respondWithError(w http.ResponseWriter, code int, message str
 	h.respondWithJSON(w, code, map[string]string{"error": message})
 }
 
-// --- Refactored HandleCreateHashes Logic ---
-
 // parseCreateHashesRequest parses the multipart form data to extract the file,
 // its content, and the hash configuration.
 func (h *Handlers) parseCreateHashesRequest(r *http.Request) (*multipart.FileHeader, *models.HashConfig, []byte, error) {
@@ -145,6 +143,32 @@ func (h *Handlers) getStoredHashes(ctx context.Context, fileUUID uuid.UUID) (map
 	return hashesFromDB, nil
 }
 
+func (h *Handlers) getWatermarkHistory(ctx context.Context, fileUUID uuid.UUID) ([]models.WaterMarkHistory, error) {
+
+	watermarks := make([]models.WaterMarkHistory, 0)
+
+	rows, err := h.DB.Query(
+		ctx,
+		`SELECT algorithm, md5_after FROM watermark_history WHERE file_uuid = $1`,
+		fileUUID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("db error querying hashes: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var watermark models.WaterMarkHistory
+		if err := rows.Scan(&watermark.Algorithm, &watermark.MD5); err != nil {
+			return nil, fmt.Errorf("db error scanning hash row: %w", err)
+		}
+		watermarks = append(watermarks, watermark)
+	}
+
+	return watermarks, nil
+
+}
+
 // areAllHashesPresent checks if all requested hashes are already in the database.
 func areAllHashesPresent(requestedAlgos []models.HashAlgorithmConfig, storedHashes map[string]string) bool {
 	for _, algo := range requestedAlgos {
@@ -169,6 +193,22 @@ func (h *Handlers) insertFileRecord(ctx context.Context, filename, mediaType, md
 		return uuid.Nil, fmt.Errorf("db error inserting file: %w", err)
 	}
 	return fileUUID, nil
+}
+
+func (h *Handlers) insertWatermarkRecord(ctx context.Context, file_uuid uuid.UUID, md5, algorithm string) error {
+
+	_, err := h.DB.Exec(
+		ctx,
+		`INSERT INTO watermark_history(file_uuid, algorithm, md5_after) VALUES ($1, $2, $3)`,
+		file_uuid,
+		algorithm,
+		md5)
+
+	if err != nil {
+		return fmt.Errorf("db error inserting file: %w", err)
+	}
+	return nil
+
 }
 
 // generateAndStoreHashes generates hashes for the given file and stores them.
@@ -310,11 +350,15 @@ func (h *Handlers) HandleListMediaHashes(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Get the watermark information from the database
+	watermarks, err := h.getWatermarkHistory(r.Context(), fileUUID)
+
 	// Return json with hash list
-	response := models.HashResponse{
-		FileUUID: fileUUID.String(),
-		Filename: filepath.Base(filename),
-		Hashes:   hashes,
+	response := models.FileResponse{
+		FileUUID:   fileUUID.String(),
+		Filename:   filepath.Base(filename),
+		Hashes:     hashes,
+		Watermarks: watermarks,
 	}
 
 	h.respondWithJSON(w, http.StatusOK, response)
@@ -350,7 +394,7 @@ func (h *Handlers) HandleEmbedWatermark(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Parse watermark data (raw JSON)
+	// Parse watermark data
 	dataStr := r.FormValue("data")
 	if dataStr == "" {
 		h.respondWithError(w, http.StatusBadRequest, "Missing watermark data")
@@ -358,6 +402,26 @@ func (h *Handlers) HandleEmbedWatermark(w http.ResponseWriter, r *http.Request) 
 	}
 
 	watermarkData := []byte(dataStr)
+
+	//Check if we have this file already registered based on the MD5
+	md5Hasher := md5.New()
+	md5Hasher.Write(fileBytes)
+	md5Hash := hex.EncodeToString(md5Hasher.Sum(nil))
+
+	fileUUID, found, err := h.findExistingFile(r.Context(), md5Hash)
+	if err != nil {
+		h.respondWithError(w, http.StatusInternalServerError, "Database error while searching for file.")
+		return
+	}
+
+	//We have not seen this file before so we register it
+	if !found {
+		fileUUID, err = h.insertFileRecord(r.Context(), header.Filename, header.Header.Get("Content-Type"), md5Hash)
+		if err != nil {
+			h.respondWithError(w, http.StatusInternalServerError, "Database error while inserting new file record.")
+			return
+		}
+	}
 
 	// Get the watermarker
 	watermarker, err := watermarking.GetWatermarker(config.Algorithm)
@@ -373,20 +437,50 @@ func (h *Handlers) HandleEmbedWatermark(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Return the new file with the embedded watermark
-	w.Header().Set("Content-Disposition", "attachment; filename=\"watermarked_"+filepath.Base(header.Filename)+"\"")
-	w.Header().Set("Content-Type", header.Header.Get("Content-Type"))
-	w.WriteHeader(http.StatusOK)
-
 	resultBytesData, err := io.ReadAll(resultBytes)
+
+	//Compute the MD5 of the watermarked file
+	md5Hasher = md5.New()
+	md5Hasher.Write(resultBytesData)
+
+	//Register the watermark action with the database
+	err = h.insertWatermarkRecord(r.Context(), fileUUID, hex.EncodeToString(md5Hasher.Sum(nil)), watermarker.Name())
+
 	if err != nil {
-		h.respondWithError(w, http.StatusInternalServerError, "Failed to read watermarked file: "+err.Error())
+		h.respondWithError(w, http.StatusInternalServerError, "Failed to register watermark"+err.Error())
 		return
 	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", `attachment; filename="watermarked_`+filepath.Base(header.Filename)+`"`)
+	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(resultBytesData)
+
+	// Prepare multipart/mixed response
+	/*var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	w.Header().Set("Content-Type", "multipart/mixed; boundary="+mw.Boundary())
+
+	// Part 1: JSON metadata
+	jsonPart, _ := mw.CreatePart(textproto.MIMEHeader{
+		"Content-Type": []string{"application/json"},
+	})
+
+	metadata := map[string]interface{}{
+		"file_uuid": fileUUID.String(),
+		"algorithm": watermarker.Name(),
+	}
+
+	_ = json.NewEncoder(jsonPart).Encode(metadata)
+
+	// Part 2: Watermarked file
+	filePart, _ := mw.CreatePart(textproto.MIMEHeader{
+		"Content-Type":        []string{"application/octet-stream"},
+		"Content-Disposition": []string{`attachment; filename="watermarked_` + filepath.Base(header.Filename) + `"`},
+	})
+	_, _ = filePart.Write(resultBytesData)*/
 }
 
-// HandleExtractWatermark is a placeholder for extracting a watermark.
 func (h *Handlers) HandleExtractWatermark(w http.ResponseWriter, r *http.Request) {
 	// Parse multipart form data
 	file, _, err := r.FormFile("media")
@@ -445,7 +539,6 @@ func (h *Handlers) HandleExtractWatermark(w http.ResponseWriter, r *http.Request
 	h.respondWithJSON(w, http.StatusOK, response)
 }
 
-// HandleQueryHashesByMedia is a placeholder for querying by hash.
 func (h *Handlers) HandleQueryHashesByMedia(w http.ResponseWriter, r *http.Request) {
 
 	//Parse the request data
@@ -471,25 +564,29 @@ func (h *Handlers) HandleQueryHashesByMedia(w http.ResponseWriter, r *http.Reque
 		//Get the correct hasher
 		hasher, err := hashing.GetHasher(algo)
 		if err != nil {
-			log.Printf("[ERROR] Failed to get hasher")
-			//TODO return http errror
+			log.Printf("[ERROR] Failed to get hasher for algorithm %s: %v", algo, err)
+			h.respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Failed to get hasher for algorithm %s", algo))
 			return
 		}
 
 		entries, err := hasher.CheckHash(bytes.NewReader(fileBytes))
 
 		if err != nil {
-			log.Printf("[ERROR] failed to check hashes")
-			//Todo return http error
+			log.Printf("[ERROR] failed to check hashes for algorithm %s: %v", algo, err)
+			h.respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to check hashes for algorithm %s", algo))
 			return
 		}
 
 		//Iterate over the entries and get the linked file-id
-		for idx, _ := range entries {
-			err = h.getFileUUIDByHash(&entries[idx])
+		for idx := range entries {
+			err = h.getFileUUIDByHash(r.Context(), &entries[idx])
 
 			if err != nil {
-				log.Printf("[ERROR] Failed to find linked uuid")
+				// If no rows are found, it's not an error we need to log verbosely.
+				// The entry will just have an empty UUID and be filtered out.
+				if err != pgx.ErrNoRows {
+					log.Printf("[ERROR] Failed to find linked uuid for hash %s: %v", entries[idx].HashId, err)
+				}
 			}
 		}
 
@@ -507,10 +604,10 @@ func (h *Handlers) HandleQueryHashesByMedia(w http.ResponseWriter, r *http.Reque
 	h.respondWithJSON(w, http.StatusOK, results)
 }
 
-func (h *Handlers) getFileUUIDByHash(entry *models.EntrySimilarity) error {
+func (h *Handlers) getFileUUIDByHash(ctx context.Context, entry *models.EntrySimilarity) error {
 	const FILEQUERY = `SELECT file_uuid FROM hashes WHERE algorithm = $1 AND hash_value = $2`
 	var fileUUID uuid.UUID
-	err := h.DB.QueryRow(context.Background(), FILEQUERY, entry.Algorithm, entry.HashId).Scan(&fileUUID)
+	err := h.DB.QueryRow(ctx, FILEQUERY, entry.Algorithm, entry.HashId).Scan(&fileUUID)
 	if err != nil {
 		return err
 	}
@@ -518,7 +615,6 @@ func (h *Handlers) getFileUUIDByHash(entry *models.EntrySimilarity) error {
 	return nil
 }
 
-// HandleQueryHashesByHashValue is a placeholder for querying by hash.
 func (h *Handlers) HandleQueryHashesByHashValue(w http.ResponseWriter, r *http.Request) {
 
 	// Parse the request body into HashValueQueryRequest
@@ -538,7 +634,7 @@ func (h *Handlers) HandleQueryHashesByHashValue(w http.ResponseWriter, r *http.R
 			continue // skip unknown hashers
 		}
 
-		entry, err := h.GetEntryByAlgorithmAndHash(hasher.Name(), hashValue)
+		entry, err := h.GetEntryByAlgorithmAndHash(r.Context(), hasher.Name(), hashValue)
 		if err != nil {
 			log.Printf("Error checking hash for %s: %v", algo, err)
 			continue // skip errors
@@ -560,25 +656,25 @@ func (h *Handlers) HandleHashAlgorithmListing(w http.ResponseWriter, r *http.Req
 
 // HandleWatermarkAlgorithmListing returns a list of supported watermarking algorithms.
 func (h *Handlers) HandleWatermarkAlgorithmListing(w http.ResponseWriter, r *http.Request) {
-	// Placeholder for listing watermarking algorithms
 	watermarks := watermarking.ListSupportedAlgorithms()
 	h.respondWithJSON(w, http.StatusOK, map[string]interface{}{"algorithms": watermarks})
 }
 
 // GetEntryByAlgorithmAndHash queries the database for an entry matching the algorithm and hash value.
-func (h *Handlers) GetEntryByAlgorithmAndHash(algorithm string, hashValue string) (*models.EntrySimilarity, error) {
+func (h *Handlers) GetEntryByAlgorithmAndHash(ctx context.Context, algorithm string, hashValue string) (*models.EntrySimilarity, error) {
 
-	row := h.DB.QueryRow(context.Background(), `SELECT file_uuid, algorithm, hash_value FROM hashes WHERE algorithm = $1 AND hash_value = $2 LIMIT 1`, algorithm, hashValue)
-	var uuid, algo, hash string
-	if err := row.Scan(&uuid, &algo, &hash); err != nil {
-		if err.Error() == "no rows in result set" {
+	row := h.DB.QueryRow(ctx, `SELECT file_uuid, algorithm, hash_value FROM hashes WHERE algorithm = $1 AND hash_value = $2 LIMIT 1`, algorithm, hashValue)
+	var fileUUID, algo, hash string
+	if err := row.Scan(&fileUUID, &algo, &hash); err != nil {
+		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
 	return &models.EntrySimilarity{
 		Algorithm:  algo,
-		UUID:       uuid,
+		UUID:       fileUUID,
 		Similarity: 100,
+		HashId:     hash,
 	}, nil
 }

@@ -1,0 +1,122 @@
+openapi: 3.0.3
+info:
+  title: MediaGuard API
+  version: 1.0.0
+  description: Extendable API for media hashing and watermarking.
+servers:
+  - url: http://localhost:8080
+paths:
+  /api/v1/hashes:
+    post:
+      summary: Calculates and stores perceptual hashes for a media file.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                media:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uuid:
+                    type: string
+                  hashes:
+                    type: object
+  /api/v1/files/{uuid}:
+    get:
+      summary: Retrieves all stored information for a file.
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  metadata:
+                    type: object
+  /api/v1/watermarks:
+    post:
+      summary: Embeds a watermark into a media file.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                media:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+  /api/v1/query/hashes:
+    post:
+      summary: Queries the database to find media with similar perceptual hashes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                hash:
+                  type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  matches:
+                    type: array
+                    items:
+                      type: object
+  /api/v1/query/watermarks:
+    post:
+      summary: Extracts a watermark from a media file.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                media:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  watermark:
+                    type: string

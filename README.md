@@ -57,33 +57,81 @@ The application is configured via environment variables, as defined in `docker-c
 
 ## API Documentation
 
-The API endpoints are documented below. You can use tools like `curl` or Postman to interact with the API.
+The API endpoints are documented below. You can use tools like `curl`, Postman, or view the full OpenAPI specification in [`openapi.yaml`](./openapi.yaml).
 
-*Note: This is a skeleton project. The handlers have placeholder logic and do not fully implement file processing.*
+**Note:** This is a skeleton project. The handlers currently have placeholder logic and do not fully implement file processing.
 
 ### `POST /api/v1/hashes`
 
 Calculates and stores perceptual hashes for a media file.
 
--   **Request**: `multipart/form-data`
-    -   `media`: An image or video file.
--   **Success Response**: `200 OK` with a file UUID and placeholder hashes.
+- **Request:** `multipart/form-data`
+  - `media`: An image or video file.
+- **Response:** `200 OK` with a file UUID and perceptual hashes (pHash, dHash, etc).
 
 ### `GET /api/v1/files/{uuid}`
 
 Retrieves all stored information for a file.
 
--   **Success Response**: `200 OK` with file metadata (placeholder).
+- **Response:** `200 OK` with file metadata and hash information.
 
 ### `POST /api/v1/watermarks`
 
 Embeds a watermark into a media file.
 
--   **Request**: `multipart/form-data`
-    -   `media`: The media file.
--   **Success Response**: `200 OK` (placeholder response).
+- **Request:** `multipart/form-data`
+  - `media`: The media file.
+- **Response:** `200 OK` with watermarking result.
 
 ### `POST /api/v1/query/hashes`
+
+Queries the database to find media with similar perceptual hashes.
+
+- **Request:** `application/json`
+  - `hash`: The perceptual hash to query for.
+- **Response:** `200 OK` with a list of matching files.
+
+### `POST /api/v1/query/watermarks`
+
+Extracts a watermark from a media file.
+
+- **Request:** `multipart/form-data`
+  - `media`: The media file.
+- **Response:** `200 OK` with extracted watermark data.
+
+---
+
+## OpenAPI Specification
+
+The full API specification is available in [`openapi.yaml`](./openapi.yaml). You can use this file with tools like Swagger UI or Postman to explore and test the API interactively.
+
+---
+
+## Extending the API: Adding New Hashing or Watermarking Algorithms
+
+### Adding a New Hashing Algorithm
+
+1. **Create the Algorithm Implementation:**
+   - Add your algorithm in a new file under `internal/hashing/` (or a subfolder).
+   - Implement the required interface defined in `internal/hashing/interfaces.go`.
+
+2. **Register the Algorithm:**
+   - Update `internal/hashing/registry.go` to register your new algorithm so it is available to the API.
+
+3. **Update Handlers (if needed):**
+   - Modify the relevant API handler in `internal/api/handlers.go` to support your new algorithm.
+
+### Adding a New Watermarking Algorithm
+
+1. **Create the Algorithm Implementation:**
+   - Add your algorithm in a new file under `internal/watermarking/` (or a subfolder).
+   - Implement the required interface defined in `internal/watermarking/interfaces.go`.
+
+2. **Register the Algorithm:**
+   - Update `internal/watermarking/registry.go` to register your new algorithm so it is available to the API.
+
+3. **Update Handlers (if needed):**
+   - Modify the relevant API handler in `internal/api/handlers.go` to support your new algorithm.
 
 Queries the database to find media with similar perceptual hashes.
 

@@ -18,6 +18,18 @@ type WaterMarkRespone struct {
 	Watermark map[string]string `json:"watermark"`
 }
 
+type FileResponse struct {
+	FileUUID   string             `json:"file_uuid"`
+	Filename   string             `json:"filename"`
+	Hashes     map[string]string  `json:"hashes"`
+	Watermarks []WaterMarkHistory `json:"watermarks"`
+}
+
+type WaterMarkHistory struct {
+	Algorithm string `json:"algorithm"`
+	MD5       string `json:"md5"`
+}
+
 // HashAlgorithmConfig represents a single hash algorithm and its parameters.
 type HashAlgorithmConfig struct {
 	Algorithm  string                 `json:"algorithm"`
