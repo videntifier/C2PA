@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  mediaguard-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mediaguard-api
+    ports:
+      - "${API_PORT}:8080"
+    depends_on:
+      mediaguard-db:
+        condition: service_healthy
+    environment:
+      - API_PORT=${API_PORT}
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@mediaguard-db:${DB_PORT}/${POSTGRES_DB}?sslmode=disable
+      - VSE_ADDRESS=${VSE_ADDRESS}
+      - VSE_TOKEN=${VSE_TOKEN}
+    networks:
+      - mediaguard-net
+
+  mediaguard-db:
+    image: postgres:17-alpine
+    container_name: mediaguard-db
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - mediaguard-data:/var/lib/postgresql/data
+      - ./migrations/001_initial_schema.up.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    networks:
+      - mediaguard-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+### Only for local deployment of VSE Search stack
+#  vse:
+#    image: videntifier/vse-stack:6.5.1
+#    ports:
+#      - "5555:9001"
+#      - "7771:7771"
+#    container_name: vse
+#    volumes:
+#      - ./db/database:/mnt/database
+#      - ./db/config/vse-config.yaml:/app/VSE/vse-config.yaml
+#      - ./db/config/supervisord.conf:/app/supervisord.conf
+#    restart: always
+#    networks:
+#      - mediaguard-net
+
+volumes:
+  mediaguard-data:
+
+networks:
+  mediaguard-net:
+    driver: bridge
