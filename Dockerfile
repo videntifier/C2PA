@@ -26,7 +26,7 @@ WORKDIR /app/
 
 # Copy the pre-built binary from the builder stage
 COPY --from=builder /mediaguard-api .
-COPY ./bin/desc_tools .
+COPY ./bin/* .
 
 # Expose port 8080 to the outside world
 EXPOSE 8080

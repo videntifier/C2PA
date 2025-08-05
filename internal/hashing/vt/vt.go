@@ -107,6 +107,12 @@ type APIError struct {
 
 func init() {
 
+	//Check if the desc_tools binary is available
+	if _, err := os.Stat("/app/desc_tools"); os.IsNotExist(err) {
+		log.Printf("[WARN] desc_tools binary not found in ./bin folder, disabling VT-hashing")
+		return
+	}
+
 	//Read configuration from environment variables
 	vtHash := &VTHash{}
 

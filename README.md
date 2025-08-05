@@ -16,7 +16,7 @@ MediaGuard is an extendable standalone API service in Go for media hashing and w
 ## Features
 
 -   **Perceptual Hashing**: Generate hashes for images and videos. Currently implements:
-      - Videntifier Visual Fingerprints (VT Hashes).
+      - Videntifier Visual Fingerprints (VT Hashes). Requires Videntifier service access for activation. Contact support@videntifier.com for more details.
       - SHA256 Cryptographic hash.
 -   **Digital Watermarking**: Embed and extract watermarks. Currently implements:
       - Metadata embedding via FFMPEG.
