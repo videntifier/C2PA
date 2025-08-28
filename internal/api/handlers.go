@@ -82,7 +82,10 @@ func (h *Handlers) parseCreateHashesRequest(r *http.Request) (*multipart.FileHea
 
 	var config models.HashConfig
 	configStr := r.FormValue("config")
-	if configStr != "" {
+
+	if configStr == "" {
+		return nil, nil, nil, fmt.Errorf("config parameter is required and cannot be empty")
+	} else {
 		if err := json.Unmarshal([]byte(configStr), &config); err != nil {
 			return nil, nil, nil, fmt.Errorf("invalid config JSON: %w", err)
 		}
@@ -190,6 +193,12 @@ func (h *Handlers) getWatermarkHistory(ctx context.Context, fileUUID uuid.UUID) 
 
 // areAllHashesPresent checks if all requested hashes are already in the database.
 func areAllHashesPresent(requestedAlgos []models.HashAlgorithmConfig, storedHashes map[string]string) bool {
+
+	if len(requestedAlgos) == 0 {
+		return false
+	}
+
+	log.Printf("[DEBUG] Checking for presence of %d algorithms", len(requestedAlgos))
 	for _, algo := range requestedAlgos {
 		if _, ok := storedHashes[algo.Algorithm]; !ok {
 			return false
