@@ -40,19 +40,19 @@ services:
       retries: 5
 
 ### Only for local deployment of VSE Search stack
-#  vse:
-#    image: videntifier/vse-stack:6.5.1
-#    ports:
-#      - "5555:9001"
-#      - "7771:7771"
-#    container_name: vse
-#    volumes:
-#      - ./db/database:/mnt/database
-#      - ./db/config/vse-config.yaml:/app/VSE/vse-config.yaml
-#      - ./db/config/supervisord.conf:/app/supervisord.conf
-#    restart: always
-#    networks:
-#      - mediaguard-net
+  # vse:
+  #   image: videntifier/vse-stack:6.5.1
+  #   ports:
+  #     - "5555:9001"
+  #     - "7771:7771"
+  #   container_name: vse
+  #   volumes:
+  #     - ./db/database:/mnt/database
+  #     - ./db/config/vse-config.yaml:/app/VSE/vse-config.yaml
+  #     - ./db/config/supervisord.conf:/app/supervisord.conf
+  #   restart: always
+  #   networks:
+  #     - mediaguard-net
 
 volumes:
   mediaguard-data:
