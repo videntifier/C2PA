@@ -23,6 +23,7 @@ func NewRouter(db *pgxpool.Pool) *mux.Router {
 
 	apiV1.HandleFunc("/query/hashes/by-media", h.HandleQueryHashesByMedia).Methods(http.MethodPost)
 	apiV1.HandleFunc("/query/hashes/by-hash", h.HandleQueryHashesByHashValue).Methods(http.MethodPost)
+	apiV1.HandleFunc("/query/hashes/by-mpd-playlist", h.HandleQueryHashesByMPDPlaylist).Methods(http.MethodPost)
 
 	apiV1.HandleFunc("/files/{uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}", h.HandleListMediaHashes).Methods(http.MethodGet)
 
