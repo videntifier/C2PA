@@ -19,8 +19,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -ldflags="-w -s" -o /mediaguard-api ./c
 # Stage 2: Create the final, minimal image
 FROM ubuntu:24.10
 
-# Add certificates for potential HTTPS calls
-RUN apt-get update && apt-get install -y ffmpeg ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+	&& apt-get install -y ffmpeg ca-certificates yt-dlp \
+	&& rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app/
 

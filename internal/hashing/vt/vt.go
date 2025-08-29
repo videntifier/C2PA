@@ -184,17 +184,16 @@ func extractDescriptorsIntoFile(reader io.Reader) (string, error) {
 	// Create a temporary file
 	tmpFile, err := os.CreateTemp("/tmp", "vt_input_*")
 	if err != nil {
-		log.Printf("[DEBUG] Failed to create temp file")
+		log.Printf("[ERROR] Failed to create temp file")
 		return "", err
 	}
 
-	log.Printf("[DEBUG] Temp file %s", tmpFile.Name())
 	defer os.Remove(tmpFile.Name())
 
 	// Copy the reader contents to the temp file
 	bytesWrt, err := io.Copy(tmpFile, reader)
 	if err != nil {
-		log.Printf("[DEBUG] Failed to copy contents")
+		log.Printf("[ERROR] Failed to copy contents")
 		return "", err
 	}
 
@@ -202,7 +201,7 @@ func extractDescriptorsIntoFile(reader io.Reader) (string, error) {
 
 	// Ensure all data is flushed to disk
 	if err := tmpFile.Close(); err != nil {
-		log.Printf("[DEBUG] Failed to close temp file")
+		log.Printf("[ERROR] Failed to close temp file")
 		return "", err
 	}
 

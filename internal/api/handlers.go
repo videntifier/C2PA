@@ -124,6 +124,27 @@ func (h *Handlers) parseQueryHashesRequest(r *http.Request) (*multipart.FileHead
 	return header, &config, fileBytes, nil
 }
 
+func (h *Handlers) parseQueryPlaylistRequest(r *http.Request) (*models.HashMediaQueryRequest, []byte, error) {
+
+	//Get url from playlist_url form parameter
+	playlistURL := r.FormValue("playlist_url")
+	fileBytes, err := readBytesFromPlaylist(playlistURL)
+
+	if err != nil {
+		return nil, nil, fmt.Errorf("Failed to access playlist file: %s", err.Error())
+	}
+
+	var config models.HashMediaQueryRequest
+	configStr := r.FormValue("config")
+	if configStr != "" {
+		if err := json.Unmarshal([]byte(configStr), &config); err != nil {
+			return nil, nil, fmt.Errorf("invalid config JSON: %w", err)
+		}
+	}
+
+	return &config, fileBytes, nil
+}
+
 // findExistingFile checks if a file with the given MD5 hash already exists.
 func (h *Handlers) findExistingFile(ctx context.Context, md5Hash string) (uuid.UUID, bool, error) {
 	var existingFileUUID uuid.UUID
@@ -198,7 +219,6 @@ func areAllHashesPresent(requestedAlgos []models.HashAlgorithmConfig, storedHash
 		return false
 	}
 
-	log.Printf("[DEBUG] Checking for presence of %d algorithms", len(requestedAlgos))
 	for _, algo := range requestedAlgos {
 		if _, ok := storedHashes[algo.Algorithm]; !ok {
 			return false
@@ -585,51 +605,48 @@ func (h *Handlers) HandleQueryHashesByMedia(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	results := make([]models.EntrySimilarity, 0)
-	//Iterate over all the algorith types found in the config
-	for _, algo := range config.Algorithms {
-
-		//Get the correct hasher
-		hasher, err := hashing.GetHasher(algo)
-		if err != nil {
-			log.Printf("[ERROR] Failed to get hasher for algorithm %s: %v", algo, err)
-			h.respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Failed to get hasher for algorithm %s", algo))
-			return
-		}
-
-		entries, err := hasher.CheckHash(bytes.NewReader(fileBytes))
-
-		if err != nil {
-			log.Printf("[ERROR] failed to check hashes for algorithm %s: %v", algo, err)
-			h.respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to check hashes for algorithm %s", algo))
-			return
-		}
-
-		//Iterate over the entries and get the linked file-id
-		for idx := range entries {
-			err = h.getFileUUIDByHash(r.Context(), &entries[idx])
-
-			if err != nil {
-				// If no rows are found, it's not an error we need to log verbosely.
-				// The entry will just have an empty UUID and be filtered out.
-				if err != pgx.ErrNoRows {
-					log.Printf("[ERROR] Failed to find linked uuid for hash %s: %v", entries[idx].HashId, err)
-				}
-			}
-		}
-
-		//Remove all entries in entries with empty UUID
-		filteredEntries := make([]models.EntrySimilarity, 0, len(entries))
-		for _, entry := range entries {
-			if entry.UUID != "" {
-				filteredEntries = append(filteredEntries, entry)
-			}
-		}
-
-		results = append(results, filteredEntries...)
+	results, err := h.findSimilarEntries(r.Context(), config.Algorithms, fileBytes)
+	if err != nil {
+		h.respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
 	h.respondWithJSON(w, http.StatusOK, results)
+}
+
+// findSimilarEntries processes the fileBytes with the given algorithms and returns matching entries with UUIDs.
+func (h *Handlers) findSimilarEntries(ctx context.Context, algorithms []string, fileBytes []byte) ([]models.EntrySimilarity, error) {
+	results := make([]models.EntrySimilarity, 0)
+	for _, algo := range algorithms {
+		// Get the correct hasher
+		hasher, err := hashing.GetHasher(algo)
+		if err != nil {
+			log.Printf("[ERROR] Failed to get hasher for algorithm %s: %v", algo, err)
+			return nil, fmt.Errorf("failed to get hasher for algorithm %s", algo)
+		}
+
+		entries, err := hasher.CheckHash(bytes.NewReader(fileBytes))
+		if err != nil {
+			log.Printf("[ERROR] failed to check hashes for algorithm %s: %v", algo, err)
+			return nil, fmt.Errorf("failed to check hashes for algorithm %s", algo)
+		}
+
+		// Iterate over the entries and get the linked file-id
+		for idx := range entries {
+			err = h.getFileUUIDByHash(ctx, &entries[idx])
+			if err != nil && err != pgx.ErrNoRows {
+				log.Printf("[ERROR] Failed to find linked uuid for hash %s: %v", entries[idx].HashId, err)
+			}
+		}
+
+		// Remove all entries in entries with empty UUID
+		for _, entry := range entries {
+			if entry.UUID != "" {
+				results = append(results, entry)
+			}
+		}
+	}
+	return results, nil
 }
 
 func (h *Handlers) getFileUUIDByHash(ctx context.Context, entry *models.EntrySimilarity) error {
@@ -674,6 +691,34 @@ func (h *Handlers) HandleQueryHashesByHashValue(w http.ResponseWriter, r *http.R
 	}
 
 	h.respondWithJSON(w, http.StatusOK, results)
+}
+
+func (h *Handlers) HandleQueryHashesByMPDPlaylist(w http.ResponseWriter, r *http.Request) {
+
+	config, fileBytes, err := h.parseQueryPlaylistRequest(r)
+
+	if err != nil {
+		h.respondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	//If the config is empty add all available algorithm names to config
+	if len(config.Algorithms) == 0 {
+		algos := hashing.ListSupportedAlgorithms()
+
+		for _, algo := range algos {
+			config.Algorithms = append(config.Algorithms, algo.Name)
+		}
+	}
+
+	results, err := h.findSimilarEntries(r.Context(), config.Algorithms, fileBytes)
+	if err != nil {
+		h.respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.respondWithJSON(w, http.StatusOK, results)
+
 }
 
 // HandleHashAlgorithmListing returns a list of supported hash algorithms.
