@@ -152,6 +152,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/APIEnvelope'
+  /api/v1/query/hashes/by-mpd-playlist:
+    post:
+      summary: Queries the database to find media by an mpd playlist url.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                playlist_url:
+                  type: string
+                  description: The url to the mpd playlist file.
+                config:
+                  type: string
+                  description: Optional JSON string specifying hash algorithms.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIEnvelope'
   /api/v1/files/{uuid}:
     get:
       summary: Retrieves all stored information for a file.

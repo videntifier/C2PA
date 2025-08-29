@@ -84,77 +84,143 @@ See env.example for an example environment configuration file
 
 ## API Documentation
 
+
 The API endpoints are documented below. You can use tools like `curl`, Postman, or view the full OpenAPI specification in [`openapi.yaml`](./openapi.yaml).
 
-
 ### `POST /api/v1/hashes`
-
 Calculates and stores perceptual hashes for a media file.
 
 - **Request:** `multipart/form-data`
   - `media`: An image or video file.
-  - `config`: (optional) JSON string specifying hash algorithms. If omitted all registered algorithms are used.
-- **Response:** `200 OK` with a file UUID and perceptual hashes (pHash, dHash, etc).
+  - `config`: JSON string specifying hash algorithms.  
+    Example:
+    ```json
+    {
+      "hashAlgorithms": [
+        { "algorithm": "sha256" },
+        { "algorithm": "vt" }
+      ]
+    }
+    ```
+- **Response:** `200 OK`
+  ```json
+  {
+    "version": "v1",
+    "status": "success",
+    "data": {
+      "fileUUID": "string",
+      "filename": "string",
+      "hashes": { "sha256": "...", "vt": "..." }
+    }
+  }
+  ```
 
 ### `GET /api/v1/files/{uuid}`
-
 Retrieves all stored information for a file.
 
-- **Response:** `200 OK` with file metadata, hash information, and watermark history.
+- **Response:** `200 OK`
+  ```json
+  {
+    "version": "v1",
+    "status": "success",
+    "data": {
+      "fileUUID": "string",
+      "filename": "string",
+      "hashes": { ... },
+      "watermarks": [ ... ]
+    }
+  }
+  ```
 
 ### `POST /api/v1/watermarks`
-
 Embeds a watermark into a media file.
 
 - **Request:** `multipart/form-data`
   - `media`: The media file.
   - `config`: JSON string specifying watermark algorithm.
+    Example:
+    ```json
+    { "algorithm": "ffmpeg" }
+    ```
   - `data`: The watermark data to embed.
-- **Response:** `200 OK` with the watermarked file as an attachment.
+- **Response:** `200 OK`
+  Watermarked file as an attachment.
 
 ### `POST /api/v1/query/hashes/by-media`
-
 Queries the database to find media with similar perceptual hashes.
 
 - **Request:** `multipart/form-data`
   - `media`: The media file to query.
   - `config`: (optional) JSON string specifying hash algorithms.
-- **Response:** `200 OK` with a list of matching files.
+    Example:
+    ```json
+    { "algorithms": ["sha256", "vt"] }
+    ```
+- **Response:** `200 OK`
+  List of matching files (with UUIDs and similarity).
 
 ### `POST /api/v1/query/hashes/by-hash`
-
 Queries the database to find media by hash values.
 
 - **Request:** `application/json`
-  - `hashes`: Object mapping algorithm names to hash values.
-- **Response:** `200 OK` with a list of matching files.
+  Example:
+  ```json
+  {
+    "hashes": {
+      "sha256": "f775bb099dc6be0b7db21b9da49578964f79881df1a78723706f24042585ca58",
+      "vt": "240245"
+    }
+  }
+  ```
+- **Response:** `200 OK`
+  List of matching files (with UUIDs and similarity).
+
+### `POST /api/v1/query/hashes/by-mpd-playlist`
+Queries the database to find media by an mpd playlist url.
+
+- **Request:** `multipart/form-data`
+  - `playlist_url`: The url to the mpd playlist file.
+  - `config`: (optional) JSON string specifying hash algorithms.
+    Example:
+    ```json
+    { "algorithms": ["sha256", "vt"] }
+    ```
+- **Response:** `200 OK`
+  List of matching files (with UUIDs and similarity).
 
 ### `POST /api/v1/query/watermarks`
-
 Extracts a watermark from a media file.
 
 - **Request:** `multipart/form-data`
   - `media`: The media file.
   - `config`: JSON string specifying watermark algorithm.
-- **Response:** `200 OK` with extracted watermark data.
+    Example:
+    ```json
+    { "algorithm": "basic" }
+    ```
+- **Response:** `200 OK`
+  Extracted watermark data.
 
 ### `GET /api/v1/hashes/algorithms`
-
 Lists all supported hash algorithms.
 
-- **Response:** `200 OK` with a list of algorithm names.
+- **Response:** `200 OK`
+  ```json
+  { "algorithms": [ ... ] }
+  ```
 
 ### `GET /api/v1/watermarks/algorithms`
-
 Lists all supported watermarking algorithms.
 
-- **Response:** `200 OK` with a list of algorithm names.
+- **Response:** `200 OK`
+  ```json
+  { "algorithms": [ ... ] }
+  ```
 
 ### `GET /health`
-
 Health check endpoint.
 
-- **Response:** `200 OK` with body `OK`.
+- **Response:** `200 OK` with body `OK`
 
 
 ## Extending the API
