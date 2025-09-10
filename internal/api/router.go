@@ -7,9 +7,27 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
+// corsMiddleware adds CORS headers to each response
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		//TODO Here adjust the origins to the appropriate sources
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // NewRouter creates and configures a new application router.
 func NewRouter(db *pgxpool.Pool) *mux.Router {
 	router := mux.NewRouter()
+
+	// Add CORS middleware to all routes
+	router.Use(corsMiddleware)
 
 	// Create a subrouter for API versioning
 	apiV1 := router.PathPrefix("/api/v1").Subrouter()
